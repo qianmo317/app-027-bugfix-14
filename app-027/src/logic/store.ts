@@ -151,10 +151,20 @@ export function jobOf(p: Project): { job: Job; shape: Shape | null; isBatch: boo
   const start = { x: 0, y: 0 }
   const batch = p.batch
   if (batch && batch.enabled) {
-    const src = p.shapes[0]
+    const src = p.shapes.find((s) => s.id === p.batchShapeId) ?? p.shapes[0]
     if (src) {
       const tiled = buildBatchShape(src, batch)
-      const sig = shapeSignature(src, p.settings, material)
+      // 缓存键必须包含源纹样与全部排版参数，任一项变化都要立即重排
+      const sig = [
+        shapeSignature(src, p.settings, material),
+        tiled.id,
+        batch.rows,
+        batch.cols,
+        batch.gapXMm,
+        batch.gapYMm,
+        batch.mode,
+        batch.sharedEdge,
+      ].join('|')
       let comp = batchCache.get(sig)
       if (!comp) {
         comp = computeShape(tiled, p.settings, material, start)
@@ -262,6 +272,7 @@ export function removeShape(p: Project, shapeId: string): void {
   if (i >= 0) {
     p.shapes.splice(i, 1)
     delete computedCache[shapeId]
+    if (p.batchShapeId === shapeId) p.batchShapeId = p.shapes[0]?.id
     touch(p)
   }
 }

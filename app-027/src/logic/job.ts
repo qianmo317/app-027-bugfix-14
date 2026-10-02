@@ -18,22 +18,39 @@ export type Job = {
   shapeOrder: string[]
 }
 
-/** 批量排版：同一纹样在纸上排满（间距可调，间距为 0 时可共边裁切） */
+/**
+ * 批量排版：同一纹样在纸上排满（间距可调，间距为 0 时可共边裁切）。
+ * 四方连续（four_way）按奇偶行 / 列翻面：奇数列水平镜像、奇数行垂直镜像，
+ * 相邻纹样在接缝处互为镜像，保证接花位置对上。
+ */
 export function buildBatchShape(shape: Shape, batch: BatchCfg): Shape {
   const rows = Math.max(1, Math.round(batch.rows))
   const cols = Math.max(1, Math.round(batch.cols))
   const all = shape.contours.flatMap((c) => c.points)
   const b = boundsOf(all)
-  const stepX = b.maxX - b.minX + Math.max(0, batch.gapXMm)
-  const stepY = b.maxY - b.minY + Math.max(0, batch.gapYMm)
+  const tileW = b.maxX - b.minX
+  const tileH = b.maxY - b.minY
+  const stepX = tileW + Math.max(0, batch.gapXMm)
+  const stepY = tileH + Math.max(0, batch.gapYMm)
+  const mirror = batch.mode === 'four_way'
 
   const contours: Contour[] = []
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      // 奇数列沿垂直轴翻面（水平镜像），奇数行沿水平轴翻面（垂直镜像）
+      const flipX = mirror && c % 2 === 1
+      const flipY = mirror && r % 2 === 1
       const ox = b.minX + c * stepX
       const oy = b.minY + r * stepY
       for (const src of shape.contours) {
-        const pts = src.points.map((p) => ({ x: p.x - b.minX + ox, y: p.y - b.minY + oy }))
+        const pts = src.points.map((p) => {
+          const lx = p.x - b.minX
+          const ly = p.y - b.minY
+          return {
+            x: (flipX ? tileW - lx : lx) + ox,
+            y: (flipY ? tileH - ly : ly) + oy,
+          }
+        })
         const nc = makeContour(pts, src.closed, src.warnings.filter((wn) => wn === 'not_closed' || wn === 'self_intersect'))
         contours.push(nc)
       }

@@ -193,7 +193,8 @@ function patchBatch(mut: (b: NonNullable<typeof batch.value>) => void): void {
 function setBatchShape(id: string): void {
   const p = project.value
   if (!p) return
-  p.batchShapeId = p.shapes.length > 0 ? p.shapes[0].id : id
+  if (!p.shapes.some((s) => s.id === id)) return
+  p.batchShapeId = id
   store.updateBatch(p, {})
 }
 
