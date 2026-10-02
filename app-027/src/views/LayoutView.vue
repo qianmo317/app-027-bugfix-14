@@ -193,7 +193,7 @@ function patchBatch(mut: (b: NonNullable<typeof batch.value>) => void): void {
 function setBatchShape(id: string): void {
   const p = project.value
   if (!p) return
-  p.batchShapeId = p.shapes.length > 0 ? p.shapes[0].id : id
+  p.batchShapeId = id
   store.updateBatch(p, {})
 }
 
@@ -371,7 +371,7 @@ const boundsInfo = computed(() => {
           <div v-if="batch.enabled">
             <div class="field-row">
               <label>排版纹样</label>
-              <select :value="project.batchShapeId" @change="setBatchShape(($event.target as HTMLSelectElement).value)">
+              <select :value="project.batchShapeId ?? project.shapes[0]?.id" @change="setBatchShape(($event.target as HTMLSelectElement).value)">
                 <option v-for="s in project.shapes" :key="s.id" :value="s.id">{{ s.name }}</option>
               </select>
             </div>

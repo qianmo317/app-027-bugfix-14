@@ -42,7 +42,8 @@ export const state = reactive<StoreState>({
 
 /** 派生计算结果缓存（按几何签名失效，不持久化） */
 const computedCache = reactive<Record<string, ComputedShape>>({})
-const batchCache = new Map<string, ComputedShape>()
+/** 批量排版缓存：键含排版参数与所选纹样，值把排版结果和派生数据成对保存（轮廓 id 才一致） */
+const batchCache = new Map<string, { tiled: Shape; comp: ComputedShape }>()
 
 function canUseStorage(): boolean {
   try {
@@ -151,18 +152,20 @@ export function jobOf(p: Project): { job: Job; shape: Shape | null; isBatch: boo
   const start = { x: 0, y: 0 }
   const batch = p.batch
   if (batch && batch.enabled) {
-    const src = p.shapes[0]
+    const src = p.shapes.find((s) => s.id === p.batchShapeId) ?? p.shapes[0]
     if (src) {
-      const tiled = buildBatchShape(src, batch)
-      const sig = shapeSignature(src, p.settings, material)
-      let comp = batchCache.get(sig)
-      if (!comp) {
-        comp = computeShape(tiled, p.settings, material, start)
-        batchCache.set(sig, comp)
+      // 缓存键包含行列/间距/排列方式/共边与所选纹样：任一改动都立即重排
+      const key = `${shapeSignature(src, p.settings, material)}|batch:${JSON.stringify(batch)}`
+      let entry = batchCache.get(key)
+      if (!entry) {
+        const tiled = buildBatchShape(src, batch)
+        entry = { tiled, comp: computeShape(tiled, p.settings, material, start) }
+        if (batchCache.size >= 24) batchCache.clear()
+        batchCache.set(key, entry)
       }
-      const map = new Map<string, ComputedShape>([[tiled.id, comp]])
-      const job = buildJob([tiled], map, layerOrderOf(p), { sharedEdge: batch.sharedEdge, start })
-      return { job, shape: tiled, isBatch: true, computed: map }
+      const map = new Map<string, ComputedShape>([[entry.tiled.id, entry.comp]])
+      const job = buildJob([entry.tiled], map, layerOrderOf(p), { sharedEdge: batch.sharedEdge, start })
+      return { job, shape: entry.tiled, isBatch: true, computed: map }
     }
   }
   recomputeProject(p)

@@ -18,7 +18,7 @@ export type Job = {
   shapeOrder: string[]
 }
 
-/** 批量排版：同一纹样在纸上排满（间距可调，间距为 0 时可共边裁切） */
+/** 批量排版：同一纹样在纸上排满（间距可调，间距为 0 时可共边裁切；四方连续按奇偶行列镜像翻面） */
 export function buildBatchShape(shape: Shape, batch: BatchCfg): Shape {
   const rows = Math.max(1, Math.round(batch.rows))
   const cols = Math.max(1, Math.round(batch.cols))
@@ -26,14 +26,21 @@ export function buildBatchShape(shape: Shape, batch: BatchCfg): Shape {
   const b = boundsOf(all)
   const stepX = b.maxX - b.minX + Math.max(0, batch.gapXMm)
   const stepY = b.maxY - b.minY + Math.max(0, batch.gapYMm)
+  const fourWay = batch.mode === 'four_way'
 
   const contours: Contour[] = []
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const ox = b.minX + c * stepX
       const oy = b.minY + r * stepY
+      // 四方连续：奇数列左右翻面、奇数行上下翻面，相邻块互为镜像，接缝处同一源边相接
+      const flipX = fourWay && c % 2 === 1
+      const flipY = fourWay && r % 2 === 1
       for (const src of shape.contours) {
-        const pts = src.points.map((p) => ({ x: p.x - b.minX + ox, y: p.y - b.minY + oy }))
+        const pts = src.points.map((p) => ({
+          x: flipX ? ox + (b.maxX - p.x) : p.x - b.minX + ox,
+          y: flipY ? oy + (b.maxY - p.y) : p.y - b.minY + oy,
+        }))
         const nc = makeContour(pts, src.closed, src.warnings.filter((wn) => wn === 'not_closed' || wn === 'self_intersect'))
         contours.push(nc)
       }
